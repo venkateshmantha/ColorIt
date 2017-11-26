@@ -8,10 +8,10 @@ from colorization.training_utils import evaluation_pipeline, \
 
 # PARAMETERS
 run_id = 'run1'
-epochs = 100
-val_number_of_images = 10
-total_train_images = 130 * 500
-batch_size = 100
+epochs = 10
+number_of_images = 200
+total_train_images = 1500
+batch_size = 50
 learning_rate = 0.001
 batches = total_train_images // batch_size
 
@@ -19,10 +19,9 @@ batches = total_train_images // batch_size
 sess = tf.Session()
 K.set_session(sess)
 
-# Build the network and the various operations
 col = Colorization(256)
 opt_operations = training_pipeline(col, learning_rate, batch_size)
-evaluations_ops = evaluation_pipeline(col, val_number_of_images)
+evaluations_ops = evaluation_pipeline(col, number_of_images)
 summary_writer = metrics_system(run_id, sess)
 saver, checkpoint_paths, latest_checkpoint = checkpointing_system(run_id)
 
@@ -31,7 +30,6 @@ with sess.as_default():
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
 
-    # Coordinate the loading of image files.
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
 
@@ -46,7 +44,7 @@ with sess.as_default():
     for epoch in range(epochs):
         print_log('Starting epoch: {} (total images {})'
                   .format(epoch, total_train_images), run_id)
-        # Training step
+        # Training
         for batch in range(batches):
             print_log('Batch: {}/{}'.format(batch, batches), run_id)
             res = sess.run(opt_operations)
@@ -64,6 +62,5 @@ with sess.as_default():
         summary_writer.add_summary(res['summary'], global_step)
         plot_evaluation(res, run_id, epoch)
 
-    # Finish off the filename queue coordinator.
     coord.request_stop()
     coord.join(threads)

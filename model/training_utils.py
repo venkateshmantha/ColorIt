@@ -2,14 +2,14 @@ import pickle
 import time
 from os.path import join
 
+from dataset.shared import dir_tfrecord, dir_metrics, dir_checkpoints, dir_root, \
+    maybe_create_folder
+from dataset.tfrecords import LabImageRecordReader
+
 import matplotlib
 import numpy as np
 import tensorflow as tf
 from skimage import color
-
-from dataset.shared import dir_tfrecord, dir_metrics, dir_checkpoints, dir_root, \
-    maybe_create_folder
-from dataset.tfrecords import LabImageRecordReader
 
 matplotlib.use('Agg')
 matplotlib.rcParams['figure.figsize'] = (10.0, 4.0)
@@ -17,15 +17,6 @@ import matplotlib.pyplot as plt
 
 labels_to_categories = pickle.load(
     open(join(dir_root, 'imagenet1000_clsid_to_human.pkl'), 'rb'))
-
-
-def loss_with_metrics(img_ab_out, img_ab_true, name=''):
-    # Loss is mean square erros
-    cost = tf.reduce_mean(
-        tf.squared_difference(img_ab_out, img_ab_true), name="mse")
-    # Metrics for tensorboard
-    summary = tf.summary.scalar('cost ' + name, cost)
-    return cost, summary
 
 
 def training_pipeline(col, learning_rate, batch_size):
@@ -46,7 +37,7 @@ def training_pipeline(col, learning_rate, batch_size):
         'optimizer': optimizer,
         'cost': cost,
         'summary': summary
-    }, irr, read_batched_examples
+    }
 
 
 def evaluation_pipeline(col, number_of_images):
@@ -68,6 +59,13 @@ def evaluation_pipeline(col, number_of_images):
         'summary': summary
     }
 
+def loss_with_metrics(img_ab_out, img_ab_true, name=''):
+    # Loss is mean square erros
+    cost = tf.reduce_mean(
+        tf.squared_difference(img_ab_out, img_ab_true), name="mse")
+    # Metrics for tensorboard
+    summary = tf.summary.scalar('cost ' + name, cost)
+    return cost, summary
 
 def print_log(content, run_id):
     with open('output_{}.txt'.format(run_id), mode='a') as f:
@@ -81,63 +79,19 @@ def metrics_system(run_id, sess):
 
 
 def checkpointing_system(run_id):
-    # Add ops to save and restore all the variables.
     saver = tf.train.Saver()
     checkpoint_paths = join(dir_checkpoints, run_id)
     latest_checkpoint = tf.train.latest_checkpoint(dir_checkpoints)
     return saver, checkpoint_paths, latest_checkpoint
 
-
-def plot_evaluation(res, run_id, epoch):
-    maybe_create_folder(join(dir_root, 'images', run_id))
-    for k in range(len(res['imgs_l'])):
-        img_gray = l_to_rgb(res['imgs_l'][k][:, :, 0])
-        img_output = lab_to_rgb(res['imgs_l'][k][:, :, 0],
-                                res['imgs_ab'][k])
-        img_true = lab_to_rgb(res['imgs_l'][k][:, :, 0],
-                              res['imgs_true_ab'][k])
-        top_5 = np.argsort(res['imgs_emb'][k])[-5:]
-        try:
-            top_5 = ' / '.join(labels_to_categories[i] for i in top_5)
-        except:
-            ptop_5 = str(top_5)
-
-        plt.subplot(1, 3, 1)
-        plt.imshow(img_gray)
-        plt.title('Input (grayscale)')
-        plt.axis('off')
-        plt.subplot(1, 3, 2)
-        plt.imshow(img_output)
-        plt.title('Network output')
-        plt.axis('off')
-        plt.subplot(1, 3, 3)
-        plt.imshow(img_true)
-        plt.title('Target (original)')
-        plt.axis('off')
-        plt.suptitle(top_5, fontsize=7)
-
-        plt.savefig(join(
-            dir_root, 'images', run_id, '{}_{}.png'.format(epoch, k)))
-        plt.clf()
-        plt.close()
-
-
 def l_to_rgb(img_l):
-    """
-    Convert a numpy array (l channel) into an rgb image
-    :param img_l:
-    :return:
-    """
+  
     lab = np.squeeze(255 * (img_l + 1) / 2)
     return color.gray2rgb(lab) / 255
 
 
 def lab_to_rgb(img_l, img_ab):
-    """
-    Convert a pair of numpy arrays (l channel and ab channels) into an rgb image
-    :param img_l:
-    :return:
-    """
+  
     lab = np.empty([*img_l.shape[0:2], 3])
     lab[:, :, 0] = np.squeeze(((img_l + 1) * 50))
     lab[:, :, 1:] = img_ab * 127
